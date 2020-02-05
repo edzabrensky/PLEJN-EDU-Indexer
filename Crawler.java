@@ -27,28 +27,127 @@ import java.util.HashSet;
 import java.io.File;
 import org.json.JSONObject;
 import java.util.Stack;
+import java.util.Queue; 
+import java.util.LinkedList; 
+import java.util.concurrent.*;
+import java.util.List;
+import java.util.ArrayList;
+import java.util.Scanner;
 
 public class Crawler {
-	private HashSet<String> seenLinks;
-	public static void main(String[] args) throws IOException {
+	private static ConcurrentHashMap<String, Boolean> seenLinks = new ConcurrentHashMap<>();
+	private static Boolean stopCrawling = false;
+	// private final static int numCrawlers = 6;
+	private static Queue<URL>[] fetcherBQ;//= new Queue[numCrawlers]; //for committing queue
+	private static ArrayBlockingQueue<Document>[] committerBQ;//= new ArrayBlockingQueue[numCrawlers];
+	//need lock for seenLinks write 
+	//Array of frontiers stacks only access ur own frontier
+	//Array of document queues to be committed.
+	//put in try blocks so it doesnt crash whole program :)
+	public static void fetcher(Integer id) {
+		Thread fetcher = new Thread(new Runnable() {   
+			public void run() {
+				System.out.println("Hello from a fetcher!" + id.toString());
+				//Create new frontier stack
+				//while frontier stack is not empty and stopCrawling = false, fetch, connect, get document, push fetched document to committer, get links, check if link is in seenlinks, add unseen links to frontier.
+				try {
+					while(!stopCrawling){
+						URL curr = fetcherBQ[id].remove();
+						try {
+							Document doc = Jsoup.connect(curr.toString()).userAgent("Mozilla/5.0 (Windows; U; WindowsNT 5.1; en-US; rv1.8.1.6) Gecko/20070725 Firefox/2.0.0.6").get();
+							Elements links = doc.select("a[href]");
+							committerBQ[id].put(doc);
+							for (Element link : links) {
+								String actualLink = link.attr("href");
+					            if(actualLink.contains(".edu") && seenLinks.putIfAbsent(actualLink, true) == null) {
+					            	try {
+					            		new URL(actualLink).toURI();//final check to see if url is valid
+					            		fetcherBQ[id].add(new URL(actualLink));
+					            	}
+					            	catch(Exception e) {
+
+					            	}
+					            	// System.out.println("Put in unique link: " + link.attr("href")
+					            }
+					        }
+				    	}
+				    	catch(Exception e) {
+				    		// System.out.println("Error occurred in crawler" + e.toString());
+				    	}
+				    }
+				}
+				catch(Exception e) {
+					System.out.println("Error occurred in crawler" + id.toString() + e.toString());
+				}
+			}
+		});
+  		fetcher.start();
+    }
+    public static void committer(Integer id) {
+		Thread committer = new Thread(new Runnable() {   
+			public void run() {
+				System.out.println("Hello from a committer!" + id.toString());
+				try {
+					PrintStream writeToFile = new PrintStream(new FileOutputStream("data/web" + id.toString() + ".data", true));
+					Document doc;
+					while(!stopCrawling) {
+						doc = committerBQ[id].take();
+						JSONObject myDoc = new JSONObject();
+						myDoc.put("title", doc.title());
+						myDoc.put("text", doc.text());
+						myDoc.put("url", doc.location());
+						writeToFile.println(myDoc.toString());
+						// writeToFile.close();
+						// System.out.println(doc.title());
+					}
+					writeToFile.close();
+				}
+				catch(Exception e) {
+					System.out.println("Error occurred in fetcher" + id.toString());
+				}
+			}
+		});
+  		committer.start();
+    }
+    public static void sizeChecker() {
+		Thread sizeChecker = new Thread(new Runnable() {   
+			public void run() {
+				System.out.println("Hello from a sizeChecker!");
+				long size = 0;
+				Integer sleepTime = 10000;//1000*60;
+				while((double) size/(1024*1024) < 3000) { //while size < 1000MB
+					size = 0;
+					try {
+						Thread.sleep(sleepTime);
+					}
+					catch(Exception e) {
+						System.out.println("Error sleepin bruh");
+					}
+					File dir = new File("data"); //get directory
+					for (File file : dir.listFiles()) {
+						if(file.isFile())
+						{
+							size += file.length();
+						}
+					}
+					System.out.println((double) size/(1024*1024) + "MB");
+				}
+				stopCrawling = true;
+				System.out.println(stopCrawling);
+				//sleep for like 1 minute then check size of folder.
+				//if size of folder is 1gb> then set stopCrawling = true
+			}
+		});
+  		sizeChecker.start();
+    }
+	public static void main(String[] args) throws IOException  {
 		System.out.println("Hello world");
 		Stack<URL> Frontier = new Stack();
-		Frontier.push(new URL("http://www.ucr.edu/"));
-		Frontier.push(new URL("https://www.berkeley.edu/"));
-		Frontier.push(new URL("https://www.ucsb.edu/"));
-		Frontier.push(new URL("http://www.uci.edu/"));
-		Frontier.push(new URL("http://www.ucmerced.edu/"));
-		Frontier.push(new URL("http://www.ucsd.edu/"));
-		Frontier.push(new URL("http://www.ucla.edu/"));
-		Frontier.push(new URL("http://www.ucdavis.edu/"));
-		Frontier.push(new URL("http://www.ucsc.edu/"));
-		Frontier.push(new URL("http://www.ucsf.edu/"));
-		Frontier.push(new URL("https://www.stanford.edu/"));
-		// Frontier.push(new URL("http://ycombinator.com"));
-		URL curr = Frontier.pop();
-		System.out.println("top level domain: " + curr.getHost().contains(".edu"));
-		Document doc = Jsoup.connect(curr.toString()).userAgent("Mozilla/5.0 (Windows; U; WindowsNT 5.1; en-US; rv1.8.1.6) Gecko/20070725 Firefox/2.0.0.6").get();
-		Elements links = doc.select("a[href]");
+		// URL curr = Frontier.pop();
+		// System.out.println("top level domain: " + curr.getHost().contains(".edu"));
+		// Document doc = Jsoup.connect(curr.toString()).userAgent("Mozilla/5.0 (Windows; U; WindowsNT 5.1; en-US; rv1.8.1.6) Gecko/20070725 Firefox/2.0.0.6").get();
+		// Elements links = doc.select("a[href]");
+
         // for (Element link : links) {
         //     // System.out.println(link.text()); //link name
         //     System.out.println(link.attr("href")); //actual url
@@ -67,36 +166,38 @@ public class Crawler {
 		// File input = new File("doc.ser");
 		// Document doc2 = Jsoup.parse(input, "UTF-8");//"doc.ser", "UTF-8");
 		//store text,title, and link
-		PrintStream writeToFile = new PrintStream(new FileOutputStream("web.data", true));
-		JSONObject myDoc = new JSONObject();
-		myDoc.put("title", doc.title());
-		myDoc.put("text", doc.text());
-		myDoc.put("url", curr.toString());
-		// myDoc.addProperty()
-		// System.out.println(myDoc.toString());
-		writeToFile.println(myDoc.toString());
-		writeToFile.close();
-
-		//IN ANOTHER JAVA FILE add something like this, this is not final code: 
-		FileReader fileRdr = new FileReader("web.data");
-		BufferedReader bufferRdr = new BufferedReader(fileRdr);
-		String jsonLine = null;
-		//IndexWriter idxWriter = new IndexWriter("<index direcotry>", analyzer type)
-		while((jsonLine = bufferRdr.readLine()) != null) {
-			//Document currDoc = new Document(); //USE LUCENE DOCUMENT not JSOUP 
-			//e.g. basically import lucene package Document then u can construct documentts like this
-			JSONObject jsonObj = new JSONObject(jsonLine);
-			if(jsonObj.has("title") && !jsonObj.isNull("title"))
-			{
-				String title = jsonObj.getString("title");
-				System.out.println(title);
-				//currDoc.add(new TextField("title", title, Field.Store.YES));
-			}
-			//do this for the rest of the attributes
-
-			//indxWriter.add(currDoc)
+		// PrintStream writeToFile = new PrintStream(new FileOutputStream("web.data", true));
+		// JSONObject myDoc = new JSONObject();
+		// myDoc.put("title", doc.title());
+		// myDoc.put("text", doc.text());
+		// myDoc.put("url", curr.toString());
+		// writeToFile.println(myDoc.toString());
+		// writeToFile.close();
+		File uniFile = new File("listOfUniversities.txt");
+		Scanner uniListReader = new Scanner(uniFile);
+		String uni = "";
+		List<String> unis = new ArrayList<String>();;
+		Integer numLines = 0;
+		while(uniListReader.hasNextLine()) {
+			uni = uniListReader.nextLine();
+			unis.add(uni);
+			numLines++;
 		}
-		
+		fetcherBQ = new Queue[numLines];
+		committerBQ= new ArrayBlockingQueue[numLines];
+		for(int i = 0; i < unis.size(); ++i) {
+			fetcherBQ[i] = new LinkedList<>(); 
+			committerBQ[i] = new ArrayBlockingQueue<Document>(1024);
+			System.out.println("Uni: " + unis.get(i) + " i: " + i);
+			fetcherBQ[i].add(new URL(unis.get(i)));
+			fetcher(i);
+			committer(i);
+		}
+		// for(int i = 0; i < unis.size(); ++i) {
+		// 	fetcher(i);
+		// committer(i);
+		// }
+		sizeChecker();
 	}
 
 }
