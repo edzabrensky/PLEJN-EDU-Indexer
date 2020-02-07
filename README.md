@@ -29,7 +29,7 @@ This is how we run the Crawler.
 
 Example:
 ```
-./crawler.sh listOfUniversities.txt 1 omega 
+./crawler.sh listOfUniversities.txt 1 data 
 ```
 
 
