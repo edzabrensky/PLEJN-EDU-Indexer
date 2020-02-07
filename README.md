@@ -5,6 +5,9 @@
 
 Our project creates a edu page web crawler using jsoup and an indexer with lucene.This crawler will crawl edu websites from an initial seed of edu websites. The user specifies the initial seed of edu websites, the amount of data of data to crawl and the output directory. 
 
+
+## Dataset
+A dataset of 2GB from the listOfUniversities.txt seed can be found here: https://drive.google.com/open?id=1HtZeNl80qhMpVBlPq5bAKW_DitR-QkaJ
 ### Installing
 
 The following packages are needed for the crawler to work.
