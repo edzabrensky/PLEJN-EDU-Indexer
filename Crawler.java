@@ -56,20 +56,23 @@ public class Crawler {
 						try {
 							Document doc = Jsoup.connect(curr.toString()).userAgent("Mozilla/5.0 (Windows; U; WindowsNT 5.1; en-US; rv1.8.1.6) Gecko/20070725 Firefox/2.0.0.6").get();
 							Elements links = doc.select("a[href]");
-							committerBQ[id].put(doc);
-							for (Element link : links) {
-								String actualLink = link.attr("href");
-					            if(actualLink.contains(".edu") && seenLinks.putIfAbsent(actualLink, true) == null) {
-					            	try {
-					            		new URL(actualLink).toURI();//final check to see if url is valid
-					            		fetcherBQ[id].add(new URL(actualLink));
-					            	}
-					            	catch(Exception e) {
+							if(doc.location().contains(".edu")) { //make sure we are not redirected to a non edu link when we actually visit link
+								committerBQ[id].put(doc);
+								for (Element link : links) {
+									String actualLink = link.attr("href");
+						            if(actualLink.contains(".edu") && seenLinks.putIfAbsent(actualLink, true) == null) {
+						            	try {
+						            		new URL(actualLink).toURI();//final check to see if url is valid
+						            		fetcherBQ[id].add(new URL(actualLink));
+						            	}
+						            	catch(Exception e) {
 
-					            	}
-					            	// System.out.println("Put in unique link: " + link.attr("href")
-					            }
-					        }
+						            	}
+						            	// System.out.println("Put in unique link: " + link.attr("href")
+						            }
+						        }
+					    	}
+					    	Thread.sleep(20); //small delay so that we dont constantly ping the server (i think its fairness)
 				    	}
 				    	catch(Exception e) {
 				    		// System.out.println("Error occurred in crawler" + e.toString());
@@ -115,7 +118,7 @@ public class Crawler {
 				System.out.println("Hello from a sizeChecker!");
 				long size = 0;
 				Integer sleepTime = 10000;//1000*60;
-				while((double) size/(1024*1024) < 3000) { //while size < 1000MB
+				while((double) size/(1024*1024) < 2000) { //while size < 1000MB
 					size = 0;
 					try {
 						Thread.sleep(sleepTime);
